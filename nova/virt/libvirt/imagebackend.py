@@ -63,6 +63,12 @@ __imagebackend_opts = [
     cfg.StrOpt('libvirt_images_rbd_ceph_conf',
             default='',  # default determined by librados
             help='path to the ceph configuration file to use'),
+    cfg.StrOpt('libvirt_images_sheepdog_host',
+            default='localhost',
+            help='Hostname for sheepdog service nova-compute can connect to.'),
+    cfg.IntOpt('libvirt_images_sheepdog_port',
+            default=7000,
+            help='Port for sheepdog service nova-compute can connect to.'),
         ]
 
 CONF = cfg.CONF
@@ -83,6 +89,7 @@ class Image(object):
         :driver_format: raw or qcow2
         :is_block_dev:
         """
+        LOG.debug("%s, %s" % (source_type, driver_format))
         self.source_type = source_type
         self.driver_format = driver_format
         self.is_block_dev = is_block_dev
@@ -193,6 +200,36 @@ class Image(object):
                           (CONF.preallocate_images, self.path))
         return can_fallocate
 
+    @staticmethod
+    def verify_base_size(base, size, base_size=0):
+        """Check that the base image is not larger than size.
+           Since images can't be generally shrunk, enforce this
+           constraint taking account of virtual image size.
+        """
+
+        # Note(pbrady): The size and min_disk parameters of a glance
+        #  image are checked against the instance size before the image
+        #  is even downloaded from glance, but currently min_disk is
+        #  adjustable and doesn't currently account for virtual disk size,
+        #  so we need this extra check here.
+        # NOTE(cfb): Having a flavor that sets the root size to 0 and having
+        #  nova effectively ignore that size and use the size of the
+        #  image is considered a feature at this time, not a bug.
+
+        if size is None:
+            return
+
+        if size and not base_size:
+            base_size = disk.get_disk_size(base)
+
+        if size < base_size:
+            msg = _('%(base)s virtual size %(base_size)s '
+                    'larger than flavor root disk size %(size)s')
+            LOG.error(msg % {'base': base,
+                              'base_size': base_size,
+                              'size': size})
+            raise exception.InstanceTypeDiskTooSmall()
+
     def snapshot_create(self):
         raise NotImplementedError()
 
@@ -234,7 +271,8 @@ class Raw(Image):
             #Generating image in place
             prepare_template(target=self.path, *args, **kwargs)
         else:
-            prepare_template(target=base, *args, **kwargs)
+            prepare_template(target=base, max_size=size, *args, **kwargs)
+            self.verify_base_size(base, size)
             if not os.path.exists(self.path):
                 with fileutils.remove_path_on_error(self.path):
                     copy_raw_image(base, self.path, size)
@@ -273,7 +311,9 @@ class Qcow2(Image):
 
         # Download the unmodified base image unless we already have a copy.
         if not os.path.exists(base):
-            prepare_template(target=base, *args, **kwargs)
+            prepare_template(target=base, max_size=size, *args, **kwargs)
+        else:
+            self.verify_base_size(base, size)
 
         legacy_backing_size = None
         legacy_base = base
@@ -299,17 +339,6 @@ class Qcow2(Image):
                     libvirt_utils.copy_image(base, legacy_base)
                     disk.extend(legacy_base, legacy_backing_size, use_cow=True)
 
-        # NOTE(cfb): Having a flavor that sets the root size to 0 and having
-        #            nova effectively ignore that size and use the size of the
-        #            image is considered a feature at this time, not a bug.
-        disk_size = disk.get_disk_size(base)
-        if size and size < disk_size:
-            msg = _('%(base)s virtual size %(disk_size)s'
-                    'larger than flavor root disk size %(size)s')
-            LOG.error(msg % {'base': base,
-                              'disk_size': disk_size,
-                              'size': size})
-            raise exception.InstanceTypeDiskTooSmall()
         if not os.path.exists(self.path):
             with fileutils.remove_path_on_error(self.path):
                 copy_qcow2_image(base, self.path, size)
@@ -367,6 +396,7 @@ class Lvm(Image):
         @utils.synchronized(base, external=True, lock_path=self.lock_path)
         def create_lvm_image(base, size):
             base_size = disk.get_disk_size(base)
+            self.verify_base_size(base, size, base_size=base_size)
             resize = size > base_size
             size = size if resize else base_size
             libvirt_utils.create_lvm_image(self.vg, self.lv,
@@ -384,7 +414,7 @@ class Lvm(Image):
             with self.remove_volume_on_error(self.path):
                 prepare_template(target=self.path, *args, **kwargs)
         else:
-            prepare_template(target=base, *args, **kwargs)
+            prepare_template(target=base, max_size=size, *args, **kwargs)
             with self.remove_volume_on_error(self.path):
                 create_lvm_image(base, size)
 
@@ -514,7 +544,9 @@ class Rbd(Image):
             features = self.rbd.RBD_FEATURE_LAYERING
 
         if not os.path.exists(base):
-            prepare_template(target=base, *args, **kwargs)
+            prepare_template(target=base, max_size=size, *args, **kwargs)
+        else:
+            self.verify_base_size(base, size)
 
         # keep using the command line import instead of librbd since it
         # detects zeroes to preserve sparseness in the image
@@ -534,6 +566,99 @@ class Rbd(Image):
     def snapshot_delete(self):
         pass
 
+class Sheepdog(Image):
+    def __init__(self, instance=None, disk_name=None, path=None,
+                 snapshot_name=None):
+        super(Sheepdog, self).__init__("block", "raw", is_block_dev=True)
+        self.sheepdog_name = 'instance_%s_%s' % (instance['uuid'], disk_name)
+        self.snapshot_name = 'snapshot_%s' % (snapshot_name)
+        LOG.debug('sheepdog_name: %s, snapshot_name: %s' % (self.sheepdog_name, self.snapshot_name))
+    
+    def libvirt_info(self, disk_bus, disk_dev, device_type, cache_mode,
+            extra_specs, hypervisor_version):
+        LOG.debug('disk_bus: %s, disk_dev: %s, device_type: %s, cache_mode: %s' %
+            (disk_bus, disk_dev, device_type, cache_mode))
+        """Get `LibvirtConfigGuestDisk` filled for this image.
+
+        :disk_dev: Disk bus device name
+        :disk_bus: Disk bus type
+        :device_type: Device type for this image.
+        :cache_mode: Caching mode for this image
+        :extra_specs: Instance type extra specs dict.
+        """
+        info = vconfig.LibvirtConfigGuestDisk()
+
+        # see http://libvirt.org/formatdomain.html
+        info.device_type = device_type
+        info.driver_name = 'qemu'
+        # would like to use passed cache_mode argument, but that
+        # inherits from driver._supports_direct_io which checks the
+        # local filesystem rather than sheepdog.
+        info.driver_cache = 'writethrough'
+        info.driver_io = 'threads'
+        info.driver_ioeventfd = 'on'
+        info.driver_event_idx = 'off'
+        
+        info.source_type = 'network'
+        info.source_protocol = 'sheepdog'
+        info.source_name = '%s' % (self.sheepdog_name)
+        info.source_host_name = 'localhost'
+        info.source_host_port = '7000'
+        
+        info.target_bus = disk_bus
+        info.target_dev = disk_dev
+        return info
+    
+    def _list_sheepdog_vdis(self):
+        out, err = utils.execute('dog', 'vdi', 'list')
+        lines = [ line.strip().split() for line in out.splitlines() ]
+        # scott-devoid: sheepdog list has 's' or ' ' for first char of list
+        #               output. Need to remove that to get vdi names.
+        tags = set(['s', 'c'])
+        return [l[0] if l[0] not in tags else l[1] for l in lines ] 
+
+    def _sheepdog_image_exists(self, image):
+        for img in self._list_sheepdog_vdis():
+            if img == image:
+                return True
+        return False
+        
+    def check_image_exists(self):
+        return self._sheepdog_image_exists(self.sheepdog_name)
+
+    def cache(self, fetch_func, filename, size=None, *args, **kwargs):
+        self.create_image(None, None, size, *args, **kwargs)
+
+    def _glance_image_format(self, image_id):
+        return "%s" % (image_id) 
+
+    def create_image(self, prepare_template, base, size, *args, **kwargs):
+        LOG.debug("sheepdog_image_create %s %s" % (args, kwargs))
+        image_id = kwargs.get('image_id')
+        base_vdi_image = self._glance_image_format(image_id)
+        if not self._sheepdog_image_exists(base_vdi_image):
+            LOG.debug("sheepdog: Missing image for %s" % (base_vdi_image))
+        if not self.check_image_exists():
+            tmp_snapshot_id = 'scott-magic'
+            utils.execute('dog', 'vdi', 'snapshot', '-v', '--snapshot',
+                tmp_snapshot_id, base_vdi_image) 
+            utils.execute('dog', 'vdi', 'clone', '-v', '--snapshot',
+                tmp_snapshot_id, base_vdi_image, self.sheepdog_name)
+            utils.execute('dog', 'vdi', 'delete', '--snapshot',
+                tmp_snapshot_id, base_vdi_image)
+
+    def shanpshot_create(self):
+        pass
+
+    def snapshot_extract(self):
+        pass
+
+    def snapshot_delete(self):
+        pass
+         
+        
+    
+
 
 class Backend(object):
     def __init__(self, use_cow):
@@ -542,6 +667,7 @@ class Backend(object):
             'qcow2': Qcow2,
             'lvm': Lvm,
             'rbd': Rbd,
+            'sheepdog': Sheepdog,
             'default': Qcow2 if use_cow else Raw
         }
 
