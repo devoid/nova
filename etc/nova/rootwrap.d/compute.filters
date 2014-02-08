@@ -209,3 +209,4 @@ rpc.mountd: CommandFilter, rpc.mountd, root
 
 # nova/virt/libvirt/utils.py:
 rbd: CommandFilter, rbd, root
+dog: CommandFilter, dog, root
