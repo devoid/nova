@@ -85,6 +85,8 @@ CONF = cfg.CONF
 CONF.register_opts(__imagebackend_opts, 'libvirt')
 CONF.import_opt('image_cache_subdirectory_name', 'nova.virt.imagecache')
 CONF.import_opt('preallocate_images', 'nova.virt.driver')
+#CONF.import_opt('images_sheepdog_host', 'nova.virt.libvirt.utils')
+#CONF.import_opt('images_sheepdog_port', 'nova.virt.libvirt.utils')
 
 LOG = logging.getLogger(__name__)
 
@@ -608,6 +610,107 @@ class Rbd(Image):
         images.convert_image(self.path, target, out_format)
 
 
+class Sheepdog(Image):
+    def __init__(self, instance=None, disk_name=None, path=None,
+                 snapshot_name=None):
+        super(Sheepdog, self).__init__("block", "raw", is_block_dev=True)
+        sheepdog_prefix = libvirt_utils.sheepdog_instance_prefix(instance)
+        self.sheepdog_name = '%s_%s' % (sheepdog_prefix, disk_name)
+        self.snapshot_name = 'snapshot_%s' % (snapshot_name)
+
+    def _sheepdog_source_name(self):
+        return ('//%s:%s/%s' % (CONF.libvirt.images_sheepdog_host,
+                                CONF.libvirt.images_sheepdog_port,
+                                self.sheepdog_name))
+
+    def _sheepdog_path(self):
+        return ('%s%s' % ('sheepdog:', self._sheepdog_source_name()))
+
+    def libvirt_info(self, disk_bus, disk_dev, device_type, cache_mode,
+            extra_specs, hypervisor_version):
+        """Get `LibvirtConfigGuestDisk` filled for this image.
+
+        :disk_dev: Disk bus device name
+        :disk_bus: Disk bus type
+        :device_type: Device type for this image.
+        :cache_mode: Caching mode for this image
+        :extra_specs: Instance type extra specs dict.
+        """
+        info = vconfig.LibvirtConfigGuestDisk()
+
+        # see http://libvirt.org/formatdomain.html
+        info.device_type = device_type
+        info.driver_name = 'qemu'
+        # would like to use passed cache_mode argument, but that
+        # inherits from driver._supports_direct_io which checks the
+        # local filesystem rather than sheepdog.
+        info.driver_cache = 'writethrough'
+        info.driver_io = 'threads'
+        info.driver_ioeventfd = 'on'
+        info.driver_event_idx = 'off'
+
+        info.source_type = 'network'
+        info.source_protocol = 'sheepdog'
+        info.source_name = self._sheepdog_source_name()
+
+        info.target_bus = disk_bus
+        info.target_dev = disk_dev
+        return info
+
+    def _sheepdog_image_exists(self, image):
+        for img in libvirt_utils.list_sheepdog_volumes():
+            if img == image:
+                return True
+        return False
+
+    def check_image_exists(self):
+        return self._sheepdog_image_exists(self.sheepdog_name)
+
+    def cache(self, fetch_func, filename, size=None, *args, **kwargs):
+        self.create_image(None, None, size, *args, **kwargs)
+
+    def _can_fallocate(self):
+        return False
+
+    def _glance_image_format(self, image_id):
+        return "%s" % (image_id)
+
+    def _extend(self, path, size):
+        if disk.can_resize_image(path, size):
+            name = self.sheepdog_name
+            libvirt_utils.sheepdog_execute('dog', 'vdi', 'resize', name, size)
+
+    def create_image(self, prepare_template, base, size, *args, **kwargs):
+        image_id = kwargs.get('image_id')
+        base_vdi_image = self._glance_image_format(image_id)
+        if not self._sheepdog_image_exists(base_vdi_image):
+            # TODO(scott-devoid): determine how to get image if it isn't
+            # in sheepdog already.
+            pass
+        if not self.check_image_exists():
+            tmp = "%s_tmp" % (self.sheepdog_name)
+            libvirt_utils.sheepdog_execute('dog', 'vdi', 'snapshot',
+                                           '-s', tmp, base_vdi_image)
+            libvirt_utils.sheepdog_execute('dog', 'vdi', 'clone', '-s',
+                                           tmp, base_vdi_image,
+                                           self.sheepdog_name)
+            libvirt_utils.sheepdog_execute('dog', 'vdi', 'delete', '-s', tmp,
+                                           base_vdi_image)
+        if size:
+            path = self._sheepdog_path()
+            self._extend(path, size)
+            disk.extend(path, size, use_cow=True)
+
+    def shanpshot_create(self):
+        pass
+
+    def snapshot_extract(self):
+        pass
+
+    def snapshot_delete(self):
+        pass
+
+
 class Backend(object):
     def __init__(self, use_cow):
         self.BACKEND = {
@@ -615,6 +718,7 @@ class Backend(object):
             'qcow2': Qcow2,
             'lvm': Lvm,
             'rbd': Rbd,
+            'sheepdog': Sheepdog,
             'default': Qcow2 if use_cow else Raw
         }
 

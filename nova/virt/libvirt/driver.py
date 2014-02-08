@@ -1046,6 +1046,15 @@ class LibvirtDriver(driver.ComputeDriver):
             #NOTE(haomai): destroy volumes if needed
             if CONF.libvirt.images_type == 'rbd':
                 self._cleanup_rbd(instance)
+            elif CONF.libvirt.images_type == 'sheepdog':
+                self._cleanup_sheepdog(instance)
+
+    def _cleanup_sheepdog(self, instance):
+        volumes = libvirt_utils.list_sheepdog_volumes()
+        prefix = libvirt_utils.sheepdog_instance_prefix(instance)
+        volumes = filter(lambda disk: disk.startswith(prefix), volumes)
+        if volumes:
+            libvirt_utils.remove_sheepdog_volumes(volumes)
 
     def _cleanup_rbd(self, instance):
         pool = CONF.libvirt.images_rbd_pool

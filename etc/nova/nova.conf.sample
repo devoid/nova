@@ -2935,6 +2935,16 @@
 # Deprecated group/name - [DEFAULT]/libvirt_snashot_compression
 #snapshot_compression=false
 
+# Prefix for instance names for sheepdog backend. (string
+# value)
+#images_sheepdog_instance_prefix=instance_
+
+# IP for sheepdog service. (string value)
+#images_sheepdog_host=localhost
+
+# Port for sheepdog service. (integer value)
+#images_sheepdog_port=7000
+
 
 #
 # Options defined in nova.virt.libvirt.vif

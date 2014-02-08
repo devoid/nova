@@ -40,8 +40,13 @@ libvirt_opts = [
                      'currently applies exclusively to qcow2 images',
                 deprecated_group='DEFAULT',
                 deprecated_name='libvirt_snashot_compression'),
+    cfg.StrOpt('images_sheepdog_instance_prefix', default='instance_',
+               help='Prefix for instance names for sheepdog backend.'),
+    cfg.StrOpt('images_sheepdog_host', default='localhost',
+               help='IP for sheepdog service.'),
+    cfg.IntOpt('images_sheepdog_port', default=7000,
+               help='Port for sheepdog service.'),
     ]
-
 CONF = cfg.CONF
 CONF.register_opts(libvirt_opts, 'libvirt')
 CONF.import_opt('instances_path', 'nova.compute.manager')
@@ -300,6 +305,36 @@ def remove_rbd_volumes(pool, *names):
                      {'name': name, 'pool': pool})
 
 
+def sheepdog_execute(*args, **kwargs):
+    """Add sheepdog connection info to commands."""
+    options = ('-a', CONF.images_sheepdog_host, '-p',
+               CONF.images_sheepdog_port)
+    args += options
+    return execute(*args, **kwargs)
+
+
+def sheepdog_instance_prefix(instance):
+    return "%s%s" % (CONF.images_sheepdog_instance_prefix, instance['uuid'])
+
+
+def list_sheepdog_volumes():
+    # scott-devoid: sheepdog list has 's' or ' ' for first char of list
+    #               output. Need to remove that to get vdi names.
+    # TODO(scott-devoid): replace with vdi list --raw (-r)
+    out, err = sheepdog_execute('dog', 'vdi', 'list')
+    lines = [line.strip().split() for line in out.splitlines()]
+    tags = set(['s', 'c'])
+    return [l[0] if l[0] not in tags else l[1] for l in lines]
+
+
+def remove_sheepdog_volumes(names):
+    for name in names:
+        try:
+            sheepdog_execute('dog', 'vdi', 'delete', name, run_as_root=True)
+        except processutils.ProcessExecutionError:
+            LOG.warn(_("sheepdog delete %s vdi failed") % (name))
+
+
 def get_volume_group_info(vg):
     """Return free/used/total space info for a volume group in bytes
 
@@ -474,7 +509,8 @@ def get_disk_size(path):
               by a virtual machine.
     """
     size = images.qemu_img_info(path).virtual_size
-    return int(size)
+    if size:
+        return int(size)
 
 
 def get_disk_backing_file(path, basename=True):
@@ -619,6 +655,10 @@ def find_disk(virt_dom):
             disk_path = source.get('name')
             if disk_path:
                 disk_path = 'rbd:' + disk_path
+        if not disk_path and CONF.libvirt.images_type == 'sheepdog':
+            disk_path = source.get('name')
+            if disk_path:
+                disk_path = 'sheepdog:%s' % (disk_path)
 
     if not disk_path:
         raise RuntimeError(_("Can't retrieve root device path "
@@ -633,6 +673,8 @@ def get_disk_type(path):
         return 'lvm'
     elif path.startswith('rbd:'):
         return 'rbd'
+    elif path.startswith('sheepdog:'):
+        return 'qcow2'
 
     return images.qemu_img_info(path).file_format
 
