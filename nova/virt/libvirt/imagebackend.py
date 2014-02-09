@@ -89,7 +89,6 @@ class Image(object):
         :driver_format: raw or qcow2
         :is_block_dev:
         """
-        LOG.debug("%s, %s" % (source_type, driver_format))
         self.source_type = source_type
         self.driver_format = driver_format
         self.is_block_dev = is_block_dev
@@ -572,11 +571,9 @@ class Sheepdog(Image):
         super(Sheepdog, self).__init__("block", "raw", is_block_dev=True)
         self.sheepdog_name = 'instance_%s_%s' % (instance['uuid'], disk_name)
         self.snapshot_name = 'snapshot_%s' % (snapshot_name)
-        LOG.debug('sheepdog_name: %s, snapshot_name: %s' % (self.sheepdog_name, self.snapshot_name))
-    
+
     def libvirt_info(self, disk_bus, disk_dev, device_type, cache_mode,
             extra_specs, hypervisor_version):
-        LOG.debug('disk_bus: %s, disk_dev: %s, device_type: %s, cache_mode: %s' %
             (disk_bus, disk_dev, device_type, cache_mode))
         """Get `LibvirtConfigGuestDisk` filled for this image.
 
@@ -633,11 +630,12 @@ class Sheepdog(Image):
         return "%s" % (image_id) 
 
     def create_image(self, prepare_template, base, size, *args, **kwargs):
-        LOG.debug("sheepdog_image_create %s %s" % (args, kwargs))
         image_id = kwargs.get('image_id')
         base_vdi_image = self._glance_image_format(image_id)
         if not self._sheepdog_image_exists(base_vdi_image):
-            LOG.debug("sheepdog: Missing image for %s" % (base_vdi_image))
+            # TODO(scott-devoid): determine how to get image if it isn't
+            # in sheepdog already.
+            pass
         if not self.check_image_exists():
             tmp_snapshot_id = 'scott-magic'
             utils.execute('dog', 'vdi', 'snapshot', '-v', '--snapshot',
