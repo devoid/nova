@@ -69,6 +69,9 @@ __imagebackend_opts = [
     cfg.IntOpt('libvirt_images_sheepdog_port',
             default=7000,
             help='Port for sheepdog service nova-compute can connect to.'),
+    cfg.StrOpt('libvirt_images_sheepdog_instance_prefix',
+            default='instance_',
+            help='Prefix for instance names for sheepdog backend.'),
         ]
 
 CONF = cfg.CONF
@@ -570,7 +573,8 @@ class Sheepdog(Image):
     def __init__(self, instance=None, disk_name=None, path=None,
                  snapshot_name=None):
         super(Sheepdog, self).__init__("block", "raw", is_block_dev=True)
-        self.sheepdog_name = 'instance_%s_%s' % (instance['uuid'], disk_name)
+        sheepdog_prefix = libvirt_utils.sheepdog_instance_prefix(instance)
+        self.sheepdog_name = '%s%s' % (sheepdog_prefix, disk_name)
         self.snapshot_name = 'snapshot_%s' % (snapshot_name)
 
     def libvirt_info(self, disk_bus, disk_dev, device_type, cache_mode,

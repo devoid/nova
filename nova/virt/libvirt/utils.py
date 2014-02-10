@@ -43,6 +43,8 @@ libvirt_opts = [
 CONF = cfg.CONF
 CONF.register_opts(libvirt_opts)
 CONF.import_opt('instances_path', 'nova.compute.manager')
+CONF.import_opt('libvirt_images_sheepdog_prefix',
+                'nova.virt.libvirt.imagebackend')
 LOG = logging.getLogger(__name__)
 
 
