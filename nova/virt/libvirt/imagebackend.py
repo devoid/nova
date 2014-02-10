@@ -606,16 +606,8 @@ class Sheepdog(Image):
         info.target_dev = disk_dev
         return info
     
-    def _list_sheepdog_vdis(self):
-        out, err = utils.execute('dog', 'vdi', 'list')
-        lines = [ line.strip().split() for line in out.splitlines() ]
-        # scott-devoid: sheepdog list has 's' or ' ' for first char of list
-        #               output. Need to remove that to get vdi names.
-        tags = set(['s', 'c'])
-        return [l[0] if l[0] not in tags else l[1] for l in lines ] 
-
     def _sheepdog_image_exists(self, image):
-        for img in self._list_sheepdog_vdis():
+        for img in libvirt_utils.list_sheepdog_volumes():
             if img == image:
                 return True
         return False
