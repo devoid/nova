@@ -282,16 +282,19 @@ def remove_rbd_volumes(pool, *names):
             LOG.warn(_("rbd remove %(name)s in pool %(pool)s failed"),
                      {'name': name, 'pool': pool})
 
+
 def sheepdog_instance_prefix(instance):
     return "%s%s" % (CONF.libvirt_images_sheepdog_prefix, instance['name'])
+
 
 def list_sheepdog_volumes():
     # scott-devoid: sheepdog list has 's' or ' ' for first char of list
     #               output. Need to remove that to get vdi names.
     out, err = utils.execute('dog', 'vdi', 'list')
-    lines = [ line.strip().split() for line in out.splitlines() ]
+    lines = [line.strip().split() for line in out.splitlines()]
     tags = set(['s', 'c'])
-    return [l[0] if l[0] not in tags else l[1] for l in lines ]
+    return [l[0] if l[0] not in tags else l[1] for l in lines]
+
 
 def remove_sheepdog_volumes(names):
     for name in names:

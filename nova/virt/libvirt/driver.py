@@ -944,7 +944,7 @@ class LibvirtDriver(driver.ComputeDriver):
         prefix = libvirt_utils.sheepdog_instance_prefix(instance)
         volumes = filter(lambda disk: disk.startswith(prefix), volumes)
         if volumes:
-            libivrt_utils.remove_sheepdog_volumes(volumes)
+            libvirt_utils.remove_sheepdog_volumes(volumes)
 
     def _cleanup_rbd(self, instance):
         pool = CONF.libvirt_images_rbd_pool

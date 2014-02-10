@@ -565,6 +565,7 @@ class Rbd(Image):
     def snapshot_delete(self):
         pass
 
+
 class Sheepdog(Image):
     def __init__(self, instance=None, disk_name=None, path=None,
                  snapshot_name=None):
@@ -574,7 +575,6 @@ class Sheepdog(Image):
 
     def libvirt_info(self, disk_bus, disk_dev, device_type, cache_mode,
             extra_specs, hypervisor_version):
-            (disk_bus, disk_dev, device_type, cache_mode))
         """Get `LibvirtConfigGuestDisk` filled for this image.
 
         :disk_dev: Disk bus device name
@@ -595,23 +595,23 @@ class Sheepdog(Image):
         info.driver_io = 'threads'
         info.driver_ioeventfd = 'on'
         info.driver_event_idx = 'off'
-        
+
         info.source_type = 'network'
         info.source_protocol = 'sheepdog'
         info.source_name = '%s' % (self.sheepdog_name)
         info.source_host_name = 'localhost'
         info.source_host_port = '7000'
-        
+
         info.target_bus = disk_bus
         info.target_dev = disk_dev
         return info
-    
+
     def _sheepdog_image_exists(self, image):
         for img in libvirt_utils.list_sheepdog_volumes():
             if img == image:
                 return True
         return False
-        
+
     def check_image_exists(self):
         return self._sheepdog_image_exists(self.sheepdog_name)
 
@@ -619,7 +619,7 @@ class Sheepdog(Image):
         self.create_image(None, None, size, *args, **kwargs)
 
     def _glance_image_format(self, image_id):
-        return "%s" % (image_id) 
+        return "%s" % (image_id)
 
     def create_image(self, prepare_template, base, size, *args, **kwargs):
         image_id = kwargs.get('image_id')
@@ -631,7 +631,7 @@ class Sheepdog(Image):
         if not self.check_image_exists():
             tmp_snapshot_id = 'scott-magic'
             utils.execute('dog', 'vdi', 'snapshot', '-v', '--snapshot',
-                tmp_snapshot_id, base_vdi_image) 
+                tmp_snapshot_id, base_vdi_image)
             utils.execute('dog', 'vdi', 'clone', '-v', '--snapshot',
                 tmp_snapshot_id, base_vdi_image, self.sheepdog_name)
             utils.execute('dog', 'vdi', 'delete', '--snapshot',
@@ -645,9 +645,6 @@ class Sheepdog(Image):
 
     def snapshot_delete(self):
         pass
-         
-        
-    
 
 
 class Backend(object):
