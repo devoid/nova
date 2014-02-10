@@ -69,9 +69,6 @@ __imagebackend_opts = [
     cfg.IntOpt('libvirt_images_sheepdog_port',
             default=7000,
             help='Port for sheepdog service nova-compute can connect to.'),
-    cfg.StrOpt('libvirt_images_sheepdog_instance_prefix',
-            default='instance_',
-            help='Prefix for instance names for sheepdog backend.'),
         ]
 
 CONF = cfg.CONF
@@ -633,13 +630,13 @@ class Sheepdog(Image):
             # in sheepdog already.
             pass
         if not self.check_image_exists():
-            tmp_snapshot_id = 'scott-magic'
+            temp_snapshot = libvirt_utils.sheepdog_temp_snapshot_name()
             utils.execute('dog', 'vdi', 'snapshot', '-v', '--snapshot',
-                tmp_snapshot_id, base_vdi_image)
+                temp_snapshot, base_vdi_image)
             utils.execute('dog', 'vdi', 'clone', '-v', '--snapshot',
-                tmp_snapshot_id, base_vdi_image, self.sheepdog_name)
+                temp_snapshot, base_vdi_image, self.sheepdog_name)
             utils.execute('dog', 'vdi', 'delete', '--snapshot',
-                tmp_snapshot_id, base_vdi_image)
+                temp_snapshot, base_vdi_image)
 
     def shanpshot_create(self):
         pass

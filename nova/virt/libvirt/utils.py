@@ -32,19 +32,22 @@ from nova.openstack.common import log as logging
 from nova.openstack.common import processutils
 from nova import utils
 from nova.virt import images
+import random
+import string
 
 libvirt_opts = [
     cfg.BoolOpt('libvirt_snapshot_compression',
                 default=False,
                 help='Compress snapshot images when possible. This '
                      'currently applies exclusively to qcow2 images'),
+    cfg.StrOpt('libvirt_images_sheepdog_instance_prefix',
+            default='instance_',
+            help='Prefix for instance names for sheepdog backend.'),
     ]
 
 CONF = cfg.CONF
 CONF.register_opts(libvirt_opts)
 CONF.import_opt('instances_path', 'nova.compute.manager')
-CONF.import_opt('libvirt_images_sheepdog_prefix',
-                'nova.virt.libvirt.imagebackend')
 LOG = logging.getLogger(__name__)
 
 
@@ -286,7 +289,8 @@ def remove_rbd_volumes(pool, *names):
 
 
 def sheepdog_instance_prefix(instance):
-    return "%s%s" % (CONF.libvirt_images_sheepdog_prefix, instance['name'])
+    return "%s%s" % (CONF.libvirt_images_sheepdog_instance_prefix,
+                     instance['id'])
 
 
 def list_sheepdog_volumes():
@@ -305,6 +309,10 @@ def remove_sheepdog_volumes(names):
             execute(remove_cmd)
         except processutils.ProcessExecutionError:
             LOG.warn(_("sheepdog delete %s vdi failed") % (name))
+
+
+def sheepdog_temp_snapshot_name():
+    return ''.join(random.choice(string.ascii_uppercase) for x in range(5))
 
 
 def get_volume_group_info(vg):
