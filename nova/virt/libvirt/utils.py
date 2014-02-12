@@ -290,7 +290,7 @@ def remove_rbd_volumes(pool, *names):
 
 def sheepdog_instance_prefix(instance):
     return "%s%s" % (CONF.libvirt_images_sheepdog_instance_prefix,
-                     instance['id'])
+                     instance['uuid'])
 
 
 def list_sheepdog_volumes():
@@ -306,13 +306,9 @@ def remove_sheepdog_volumes(names):
     for name in names:
         remove_cmd = ('dog', 'vdi', 'delete', name)
         try:
-            execute(remove_cmd)
+            execute(*remove_cmd, run_as_root=True)
         except processutils.ProcessExecutionError:
             LOG.warn(_("sheepdog delete %s vdi failed") % (name))
-
-
-def sheepdog_temp_snapshot_name():
-    return ''.join(random.choice(string.ascii_uppercase) for x in range(5))
 
 
 def get_volume_group_info(vg):

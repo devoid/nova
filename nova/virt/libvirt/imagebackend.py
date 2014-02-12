@@ -571,7 +571,7 @@ class Sheepdog(Image):
                  snapshot_name=None):
         super(Sheepdog, self).__init__("block", "raw", is_block_dev=True)
         sheepdog_prefix = libvirt_utils.sheepdog_instance_prefix(instance)
-        self.sheepdog_name = '%s%s' % (sheepdog_prefix, disk_name)
+        self.sheepdog_name = '%s_%s' % (sheepdog_prefix, disk_name)
         self.snapshot_name = 'snapshot_%s' % (snapshot_name)
 
     def libvirt_info(self, disk_bus, disk_dev, device_type, cache_mode,
@@ -599,7 +599,9 @@ class Sheepdog(Image):
 
         info.source_type = 'network'
         info.source_protocol = 'sheepdog'
-        info.source_name = '%s' % (self.sheepdog_name)
+        info.source_name = ('//%s:%s/%s' %
+            (CONF.libvirt_images_sheepdog_host,
+             CONF.libvirt_images_sheepdog_port, self.sheepdog_name))
         info.source_host_name = 'localhost'
         info.source_host_port = '7000'
 
@@ -630,7 +632,7 @@ class Sheepdog(Image):
             # in sheepdog already.
             pass
         if not self.check_image_exists():
-            temp_snapshot = libvirt_utils.sheepdog_temp_snapshot_name()
+            temp_snapshot = "%s_tmp" % (self.sheepdog_name)
             utils.execute('dog', 'vdi', 'snapshot', '-v', '--snapshot',
                 temp_snapshot, base_vdi_image)
             utils.execute('dog', 'vdi', 'clone', '-v', '--snapshot',
