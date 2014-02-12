@@ -630,6 +630,10 @@ def find_disk(virt_dom):
             disk_path = source.get('name')
             if disk_path:
                 disk_path = 'rbd:' + disk_path
+        if not disk_path and CONF.libvirt_images_type == 'sheepdog':
+            disk_path = source.get('name')
+            if disk_path:
+                disk_path = 'sheepdog:%s' % (disk_path)
 
     if not disk_path:
         raise RuntimeError(_("Can't retrieve root device path "
@@ -644,6 +648,8 @@ def get_disk_type(path):
         return 'lvm'
     elif path.startswith('rbd:'):
         return 'rbd'
+    elif path.startswith('sheepdog:'):
+        return 'qcow2'
 
     return images.qemu_img_info(path).file_format
 
