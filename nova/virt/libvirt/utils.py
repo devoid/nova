@@ -32,8 +32,6 @@ from nova.openstack.common import log as logging
 from nova.openstack.common import processutils
 from nova import utils
 from nova.virt import images
-import random
-import string
 
 libvirt_opts = [
     cfg.BoolOpt('libvirt_snapshot_compression',
@@ -458,7 +456,8 @@ def get_disk_size(path):
               by a virtual machine.
     """
     size = images.qemu_img_info(path).virtual_size
-    return int(size)
+    if size:
+        return int(size)
 
 
 def get_disk_backing_file(path, basename=True):
