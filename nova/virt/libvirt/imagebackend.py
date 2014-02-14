@@ -43,7 +43,7 @@ except ImportError:
 __imagebackend_opts = [
     cfg.StrOpt('libvirt_images_type',
             default='default',
-            help='VM Images format. Acceptable values are: raw, qcow2, lvm,'
+            help='VM Images format. Acceptable values are: raw, qcow3, lvm,'
                  'rbd, default. If default is specified,'
                  ' then use_cow_images flag is used instead of this one.'),
     cfg.StrOpt('libvirt_images_volume_group',
@@ -578,7 +578,7 @@ class Sheepdog(Image):
                                 self.sheepdog_name))
 
     def _sheepdog_path(self):
-        return ('%s%s' % ('sheepdog:', self._sheepdog_source_name))
+        return ('%s%s' % ('sheepdog:', self._sheepdog_source_name()))
 
     def libvirt_info(self, disk_bus, disk_dev, device_type, cache_mode,
             extra_specs, hypervisor_version):
