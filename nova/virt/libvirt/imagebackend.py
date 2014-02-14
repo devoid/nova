@@ -574,6 +574,14 @@ class Sheepdog(Image):
         self.sheepdog_name = '%s_%s' % (sheepdog_prefix, disk_name)
         self.snapshot_name = 'snapshot_%s' % (snapshot_name)
 
+    def _sheepdog_source_name(self):
+        return ('//%s:%s/%s' % (CONF.libvirt_images_sheepdog_host,
+                                CONF.libvirt_images_sheepdog_port,
+                                self.sheepdog_name))
+
+    def _sheepdog_path(self):
+        return ('%s%s' % ('sheepdog:', self._sheepdog_source_name))
+
     def libvirt_info(self, disk_bus, disk_dev, device_type, cache_mode,
             extra_specs, hypervisor_version):
         """Get `LibvirtConfigGuestDisk` filled for this image.
@@ -599,11 +607,7 @@ class Sheepdog(Image):
 
         info.source_type = 'network'
         info.source_protocol = 'sheepdog'
-        info.source_name = ('//%s:%s/%s' %
-            (CONF.libvirt_images_sheepdog_host,
-             CONF.libvirt_images_sheepdog_port, self.sheepdog_name))
-        info.source_host_name = 'localhost'
-        info.source_host_port = '7000'
+        info.source_name = self._sheepdog_source_name()
 
         info.target_bus = disk_bus
         info.target_dev = disk_dev
@@ -620,6 +624,9 @@ class Sheepdog(Image):
 
     def cache(self, fetch_func, filename, size=None, *args, **kwargs):
         self.create_image(None, None, size, *args, **kwargs)
+
+    def _can_fallocate(self):
+        return False
 
     def _glance_image_format(self, image_id):
         return "%s" % (image_id)
@@ -639,6 +646,10 @@ class Sheepdog(Image):
                 temp_snapshot, base_vdi_image, self.sheepdog_name)
             utils.execute('dog', 'vdi', 'delete', '--snapshot',
                 temp_snapshot, base_vdi_image)
+        if size:
+            path = self._sheepdog_path()
+            LOG.debug(_('sheepdog extending %s %s') % (path, size))
+            disk.extend(path, size, use_cow=True)
 
     def shanpshot_create(self):
         pass

@@ -674,6 +674,7 @@ def get_fs_info(path):
 
 def fetch_image(context, target, image_id, user_id, project_id):
     """Grab image."""
+    LOG.debug('sheepdog fetch_image %s' % ' '.join(context, target, image_id))
     images.fetch_to_raw(context, image_id, target, user_id, project_id)
 
 
