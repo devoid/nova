@@ -1,4 +1,4 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
+# vim: tabstop=5 shiftwidth=4 softtabstop=4
 
 # Copyright 2012 Grid Dynamics
 # All Rights Reserved.
@@ -63,18 +63,16 @@ __imagebackend_opts = [
     cfg.StrOpt('libvirt_images_rbd_ceph_conf',
             default='',  # default determined by librados
             help='path to the ceph configuration file to use'),
-    cfg.StrOpt('libvirt_images_sheepdog_host',
-            default='localhost',
-            help='Hostname for sheepdog service nova-compute can connect to.'),
-    cfg.IntOpt('libvirt_images_sheepdog_port',
-            default=7000,
-            help='Port for sheepdog service nova-compute can connect to.'),
         ]
 
 CONF = cfg.CONF
 CONF.register_opts(__imagebackend_opts)
 CONF.import_opt('base_dir_name', 'nova.virt.libvirt.imagecache')
 CONF.import_opt('preallocate_images', 'nova.virt.driver')
+CONF.import_opt('libvirt_images_sheepdog_host',
+                'nova.virt.libvirt.utils')
+CONF.import_opt('libvirt_images_sheepdog_port',
+                'nova.virt.libvirt.utils')
 
 LOG = logging.getLogger(__name__)
 
@@ -640,12 +638,13 @@ class Sheepdog(Image):
             pass
         if not self.check_image_exists():
             tmp = "%s_tmp" % (self.sheepdog_name)
-            utils.sheepdog_execute('dog', 'vdi', 'snapshot', '-v', '-s', tmp,
-                                   base_vdi_image)
-            utils.sheepdog_execute('dog', 'vdi', 'clone', '-v', '-s', tmp,
-                                   base_vdi_image, self.sheepdog_name)
-            utils.sheepdog_execute('dog', 'vdi', 'delete', '--snapshot', tmp,
-                                   base_vdi_image)
+            libvirt_utils.sheepdog_execute('dog', 'vdi', 'snapshot', '-v',
+                                           '-s', tmp, base_vdi_image)
+            libvirt_utils.sheepdog_execute('dog', 'vdi', 'clone', '-v', '-s',
+                                           tmp, base_vdi_image,
+                                           self.sheepdog_name)
+            libvirt_utils.sheepdog_execute('dog', 'vdi', 'delete', '-s', tmp,
+                                           base_vdi_image)
         if size:
             path = self._sheepdog_path()
             LOG.debug(_('sheepdog extending %s %s') % (path, size))

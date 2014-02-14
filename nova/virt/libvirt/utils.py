@@ -43,13 +43,15 @@ libvirt_opts = [
             help='Prefix for instance names for sheepdog backend.'),
     ]
 
+    cfg.StrOpt('libvirt_images_sheepdog_host',
+            default='localhost',
+            help='Hostname for sheepdog service nova-compute can connect to.'),
+    cfg.IntOpt('libvirt_images_sheepdog_port',
+            default=7000,
+            help='Port for sheepdog service nova-compute can connect to.'),
 CONF = cfg.CONF
 CONF.register_opts(libvirt_opts)
 CONF.import_opt('instances_path', 'nova.compute.manager')
-CONF.import_opt('libvirt_images_sheepdog_host',
-                'nova.virt.libvirt.imagebackend')
-CONF.import_opt('libvirt_images_sheepdog_port',
-                'nova.virt.libvirt.imagebackend')
 LOG = logging.getLogger(__name__)
 
 
@@ -292,8 +294,8 @@ def remove_rbd_volumes(pool, *names):
 
 def sheepdog_execute(*args, **kwargs):
     """Add sheepdog connection info to commands."""
-    options = ['-a', CONF.libvirt_images_sheepdog_host, '-p',
-               CONF.libvirt_images_sheepdog_port]
+    options = ('-a', CONF.libvirt_images_sheepdog_host, '-p',
+               CONF.libvirt_images_sheepdog_port)
     args += options
     return execute(*args, **kwargs)
 
@@ -306,7 +308,8 @@ def sheepdog_instance_prefix(instance):
 def list_sheepdog_volumes():
     # scott-devoid: sheepdog list has 's' or ' ' for first char of list
     #               output. Need to remove that to get vdi names.
-    out, err = sheepdog_execute('dog', 'vdi', 'list', '-v')
+    # TODO(scott-devoid): replace with vdi list --raw (-r)
+    out, err = sheepdog_execute('dog', 'vdi', 'list')
     lines = [line.strip().split() for line in out.splitlines()]
     tags = set(['s', 'c'])
     return [l[0] if l[0] not in tags else l[1] for l in lines]
