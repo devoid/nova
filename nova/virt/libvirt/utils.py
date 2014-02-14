@@ -38,17 +38,13 @@ libvirt_opts = [
                 default=False,
                 help='Compress snapshot images when possible. This '
                      'currently applies exclusively to qcow2 images'),
-    cfg.StrOpt('libvirt_images_sheepdog_instance_prefix',
-            default='instance_',
-            help='Prefix for instance names for sheepdog backend.'),
+    cfg.StrOpt('libvirt_images_sheepdog_instance_prefix', default='instance_',
+               help='Prefix for instance names for sheepdog backend.'),
+    cfg.StrOpt('libvirt_images_sheepdog_host', default='localhost',
+               help='IP for sheepdog service.'),
+    cfg.IntOpt('libvirt_images_sheepdog_port', default=7000,
+               help='Port for sheepdog service.'),
     ]
-
-    cfg.StrOpt('libvirt_images_sheepdog_host',
-            default='localhost',
-            help='Hostname for sheepdog service nova-compute can connect to.'),
-    cfg.IntOpt('libvirt_images_sheepdog_port',
-            default=7000,
-            help='Port for sheepdog service nova-compute can connect to.'),
 CONF = cfg.CONF
 CONF.register_opts(libvirt_opts)
 CONF.import_opt('instances_path', 'nova.compute.manager')
