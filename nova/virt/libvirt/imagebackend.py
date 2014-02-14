@@ -639,13 +639,13 @@ class Sheepdog(Image):
             # in sheepdog already.
             pass
         if not self.check_image_exists():
-            temp_snapshot = "%s_tmp" % (self.sheepdog_name)
-            utils.execute('dog', 'vdi', 'snapshot', '-v', '--snapshot',
-                temp_snapshot, base_vdi_image)
-            utils.execute('dog', 'vdi', 'clone', '-v', '--snapshot',
-                temp_snapshot, base_vdi_image, self.sheepdog_name)
-            utils.execute('dog', 'vdi', 'delete', '--snapshot',
-                temp_snapshot, base_vdi_image)
+            tmp = "%s_tmp" % (self.sheepdog_name)
+            utils.sheepdog_execute('dog', 'vdi', 'snapshot', '-v', '-s', tmp,
+                                   base_vdi_image)
+            utils.sheepdog_execute('dog', 'vdi', 'clone', '-v', '-s', tmp,
+                                   base_vdi_image, self.sheepdog_name)
+            utils.sheepdog_execute('dog', 'vdi', 'delete', '--snapshot', tmp,
+                                   base_vdi_image)
         if size:
             path = self._sheepdog_path()
             LOG.debug(_('sheepdog extending %s %s') % (path, size))

@@ -46,6 +46,10 @@ libvirt_opts = [
 CONF = cfg.CONF
 CONF.register_opts(libvirt_opts)
 CONF.import_opt('instances_path', 'nova.compute.manager')
+CONF.import_opt('libvirt_images_sheepdog_host',
+                'nova.virt.libvirt.imagebackend')
+CONF.import_opt('libvirt_images_sheepdog_port',
+                'nova.virt.libvirt.imagebackend')
 LOG = logging.getLogger(__name__)
 
 
@@ -286,6 +290,14 @@ def remove_rbd_volumes(pool, *names):
                      {'name': name, 'pool': pool})
 
 
+def sheepdog_execute(*args, **kwargs):
+    """Add sheepdog connection info to commands."""
+    options = ['-a', CONF.libvirt_images_sheepdog_host, '-p',
+               CONF.libvirt_images_sheepdog_port]
+    args += options
+    return execute(*args, **kwargs)
+
+
 def sheepdog_instance_prefix(instance):
     return "%s%s" % (CONF.libvirt_images_sheepdog_instance_prefix,
                      instance['uuid'])
@@ -294,7 +306,7 @@ def sheepdog_instance_prefix(instance):
 def list_sheepdog_volumes():
     # scott-devoid: sheepdog list has 's' or ' ' for first char of list
     #               output. Need to remove that to get vdi names.
-    out, err = utils.execute('dog', 'vdi', 'list')
+    out, err = sheepdog_execute('dog', 'vdi', 'list', '-v')
     lines = [line.strip().split() for line in out.splitlines()]
     tags = set(['s', 'c'])
     return [l[0] if l[0] not in tags else l[1] for l in lines]
@@ -302,9 +314,8 @@ def list_sheepdog_volumes():
 
 def remove_sheepdog_volumes(names):
     for name in names:
-        remove_cmd = ('dog', 'vdi', 'delete', name)
         try:
-            execute(*remove_cmd, run_as_root=True)
+            sheepdog_execute('dog', 'vdi', 'delete', name, run_as_root=True)
         except processutils.ProcessExecutionError:
             LOG.warn(_("sheepdog delete %s vdi failed") % (name))
 
