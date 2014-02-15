@@ -651,7 +651,7 @@ class Sheepdog(Image):
                                            base_vdi_image)
         if size:
             path = self._sheepdog_path()
-            self._resize(path, size)
+            self._extend(path, size)
             disk.extend(path, size, use_cow=True)
 
     def shanpshot_create(self):
