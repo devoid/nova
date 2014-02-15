@@ -631,7 +631,8 @@ class Sheepdog(Image):
 
     def _extend(self, path, size):
         if disk.can_resize_image(path, size):
-            libvirt_utils.sheepdog_execute('dog', 'vdi', 'resize', path, size)
+            name = self.sheepdog_name
+            libvirt_utils.sheepdog_execute('dog', 'vdi', 'resize', name, size)
 
     def create_image(self, prepare_template, base, size, *args, **kwargs):
         image_id = kwargs.get('image_id')
@@ -647,8 +648,8 @@ class Sheepdog(Image):
             libvirt_utils.sheepdog_execute('dog', 'vdi', 'clone', '-s',
                                            tmp, base_vdi_image,
                                            self.sheepdog_name)
-            #libvirt_utils.sheepdog_execute('dog', 'vdi', 'delete', '-s', tmp,
-            #                               base_vdi_image)
+            libvirt_utils.sheepdog_execute('dog', 'vdi', 'delete', '-s', tmp,
+                                           base_vdi_image)
         if size:
             path = self._sheepdog_path()
             self._extend(path, size)
