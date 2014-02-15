@@ -647,8 +647,8 @@ class Sheepdog(Image):
             libvirt_utils.sheepdog_execute('dog', 'vdi', 'clone', '-s',
                                            tmp, base_vdi_image,
                                            self.sheepdog_name)
-            libvirt_utils.sheepdog_execute('dog', 'vdi', 'delete', '-s', tmp,
-                                           base_vdi_image)
+            #libvirt_utils.sheepdog_execute('dog', 'vdi', 'delete', '-s', tmp,
+            #                               base_vdi_image)
         if size:
             path = self._sheepdog_path()
             self._extend(path, size)
